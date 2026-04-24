@@ -1,5 +1,6 @@
-# Build Windows .exe and publish a GitHub Release when a SemVer tag is pushed (e.g. v1.0.0).
-# Usage:
+# - Push to `main`: smoke-build Windows exe (validates the pipeline; no GitHub Release).
+# - SemVer tag (e.g. v1.0.0): full build + create GitHub Release and zip asset.
+# Tag usage:
 #   git tag v1.0.0
 #   git push origin v1.0.0
 
@@ -7,6 +8,8 @@ name: Release Windows (exe)
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*.*.*"
 
@@ -18,7 +21,34 @@ permissions:
   contents: write
 
 jobs:
+  # Runs on every push to main; no tag, no secrets, no release (PyInstaller is enough to validate the tree).
+  build-main:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Build executable (PyInstaller)
+        run: python -m PyInstaller --noconfirm jarvis.spec
+
+      - name: Check artifact
+        run: if (-not (Test-Path "dist/Jarvis.exe")) { throw "dist/Jarvis.exe missing" }
+
   build-and-release:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
     steps:
       - name: Check tag format
