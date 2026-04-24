@@ -1,6 +1,6 @@
 # Jarvis for Windows (Python + OpenAI)
 
-A modular voice assistant with Tkinter UI, speech input, LLM reasoning, system/web/developer actions, memory, logging, and Windows packaging support (install/uninstall/update flow).
+A modular voice assistant with a multi-screen Tkinter UI, speech input, LLM reasoning, system/web/developer actions, memory, logging, and Windows packaging support (install/uninstall/update flow).
 
 ## Features
 
@@ -12,8 +12,12 @@ A modular voice assistant with Tkinter UI, speech input, LLM reasoning, system/w
   - Windows controls (open/close apps, volume, lock, shutdown, restart, file search)
   - Web actions (open website, Google search, YouTube search, weather, news)
   - Developer actions (terminal commands, git status/pull/push)
-- Optional wake-word mode (`jarvis` by default).
-- Floating Tkinter desktop UI.
+- Optional wake-word mode (`jarvis` by default), passive listening, and `F8` hotkey pause/resume.
+- Multi-screen desktop UI:
+  - Home (state + pulse visualization + latest snippet)
+  - Conversation (full history + search + copy response)
+  - Settings (theme/audio/AI/update controls)
+  - Command Center (quick action cards)
 - Persistent memory + rotating logs.
 - Buildable `.exe`, installer, uninstall entry (via Inno Setup), and update checker.
 
@@ -22,6 +26,10 @@ A modular voice assistant with Tkinter UI, speech input, LLM reasoning, system/w
 ```text
 main.py
 jarvis/
+  ui/
+    app.py
+    screens.py
+    theme.py
   speech/
     listener.py
     tts.py
@@ -54,11 +62,14 @@ installer/
    - `pip install -r requirements.txt`
 4. Configure env:
    - `copy .env.example .env`
-   - Set `OPENAI_API_KEY`.
+   - Set your OpenAI API key from **Settings > AI Settings** inside the app.
    - For Indian accent English, keep `STT_LOCALE=en-IN` (default).
    - Optional speech tuning:
      - `STT_LOCALE=en-IN` (Indian English), `hi-IN` (Hindi), `en-US` (US English)
      - `WHISPER_LANGUAGE=en` or `hi`
+   - Optional weather defaults:
+     - `WEATHER_DEFAULT_CITY=Mumbai`
+     - `WEATHER_COUNTRY_CODE=IN`
    - Optional: `WEATHER_API_KEY`, `NEWS_API_KEY`, `UPDATE_MANIFEST_URL`.
 5. Run:
    - `python main.py`
@@ -79,6 +90,17 @@ installer/
 
 - `WAKE_WORD_ENABLED=1` (default): only commands with wake word are executed.
 - `WAKE_WORD_ENABLED=0`: always-active listening.
+- Press `F8` to pause/resume listening.
+
+## Weather troubleshooting
+
+- Make sure `WEATHER_API_KEY` is valid (OpenWeather API key).
+- For generic commands like `weather` or `what's the weather today`, Jarvis uses:
+  - `WEATHER_DEFAULT_CITY`
+  - `WEATHER_COUNTRY_CODE`
+- Example:
+  - `WEATHER_DEFAULT_CITY=Mumbai`
+  - `WEATHER_COUNTRY_CODE=IN`
 
 ## Installer / Uninstaller / Updates
 

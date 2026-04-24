@@ -25,18 +25,35 @@ def youtube_search(query: str) -> str:
     return f"Searching YouTube for {query}."
 
 
-def get_weather(city: str) -> str:
+def get_weather(city: str | None = None) -> str:
     if not settings.weather_api_key:
         return "Weather API key missing. Set WEATHER_API_KEY in .env."
+    target_city = (city or settings.weather_default_city).strip()
+    query = f"{target_city},{settings.weather_country_code}" if settings.weather_country_code else target_city
     url = "https://api.openweathermap.org/data/2.5/weather"
-    params = {"q": city, "appid": settings.weather_api_key, "units": "metric"}
-    resp = requests.get(url, params=params, timeout=10)
+    params = {"q": query, "appid": settings.weather_api_key, "units": "metric"}
+    try:
+        resp = requests.get(url, params=params, timeout=10)
+    except requests.RequestException:
+        return "Weather service is unreachable right now."
     if resp.status_code != 200:
-        return "Could not fetch weather right now."
+        try:
+            details = resp.json().get("message", "")
+        except Exception:
+            details = ""
+        if "city not found" in details.lower():
+            return f"I could not find weather for {target_city}. Try saying 'weather in Mumbai'."
+        return f"Could not fetch weather right now ({resp.status_code})."
     payload = resp.json()
     temp = payload["main"]["temp"]
+    feels = payload["main"].get("feels_like", temp)
     desc = payload["weather"][0]["description"]
-    return f"It is {temp} degrees Celsius in {city} with {desc}."
+    wind = payload.get("wind", {}).get("speed", 0)
+    name = payload.get("name", target_city)
+    return (
+        f"{name}: {temp}C, feels like {feels}C, {desc}. "
+        f"Wind speed is {wind} m/s."
+    )
 
 
 def get_news(country: str = "us") -> str:

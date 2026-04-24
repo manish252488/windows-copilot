@@ -5,6 +5,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Theme:
+    """Visual tokens for the Figma-style dark UI."""
+
     bg: str
     panel: str
     panel_alt: str
@@ -14,40 +16,68 @@ class Theme:
     accent_soft: str
     user_bubble: str
     jarvis_bubble: str
+    sidebar: str
+    border: str
+    accent_blue: str
+    input_border: str
+    hint: str
+    nav_active: str
+    card_highlight: str
 
 
 THEMES: dict[str, Theme] = {
     "Neon": Theme(
-        bg="#08111f",
-        panel="#10213f",
-        panel_alt="#0d1a31",
-        text="#e7f0ff",
-        text_dim="#9db0d7",
-        accent="#2de2e6",
-        accent_soft="#1d6f8a",
-        user_bubble="#214f88",
-        jarvis_bubble="#184a5b",
+        bg="#0b0f1a",
+        panel="#151c2c",
+        panel_alt="#1a2236",
+        text="#ffffff",
+        text_dim="#9ba4bf",
+        accent="#a040ff",
+        accent_soft="#2a3558",
+        user_bubble="#2a3a7a",
+        jarvis_bubble="#1e2a55",
+        sidebar="#050a12",
+        border="#2a3350",
+        accent_blue="#1a91ff",
+        input_border="#2e3a5c",
+        hint="#c9b0ff",
+        nav_active="#1a91ff",
+        card_highlight="#1e2a40",
     ),
     "Dark": Theme(
-        bg="#121417",
-        panel="#1d232a",
-        panel_alt="#171c22",
-        text="#e6e8eb",
-        text_dim="#a8afb8",
-        accent="#4d8dff",
-        accent_soft="#304f87",
-        user_bubble="#2f5ca3",
-        jarvis_bubble="#2f4458",
+        bg="#0d1117",
+        panel="#161b22",
+        panel_alt="#21262d",
+        text="#f0f3f6",
+        text_dim="#8b949e",
+        accent="#7d4dff",
+        accent_soft="#30363d",
+        user_bubble="#2d4a6f",
+        jarvis_bubble="#1f3d52",
+        sidebar="#010409",
+        border="#30363d",
+        accent_blue="#1f6feb",
+        input_border="#3d444d",
+        hint="#d1b3ff",
+        nav_active="#1f6feb",
+        card_highlight="#21262d",
     ),
     "Minimal": Theme(
-        bg="#f5f7fb",
+        bg="#f4f7ff",
         panel="#ffffff",
-        panel_alt="#eef2f8",
-        text="#1b2430",
-        text_dim="#5a6778",
-        accent="#3b82f6",
-        accent_soft="#d6e5ff",
-        user_bubble="#dbeafe",
-        jarvis_bubble="#e2e8f0",
+        panel_alt="#e9eefb",
+        text="#1a2233",
+        text_dim="#58657d",
+        accent="#5b7cfa",
+        accent_soft="#d3dcff",
+        user_bubble="#dbe7ff",
+        jarvis_bubble="#e6ebf8",
+        sidebar="#eef1f8",
+        border="#c8d4f0",
+        accent_blue="#2563eb",
+        input_border="#c2cce8",
+        hint="#6b4e9e",
+        nav_active="#2563eb",
+        card_highlight="#e8edfb",
     ),
 }

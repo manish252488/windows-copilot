@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import os
 import subprocess
 from pathlib import Path
@@ -26,14 +27,30 @@ APP_MAP = {
     "notepad": "notepad.exe",
 }
 
+APP_ALIASES = {
+    "code": "vscode",
+    "visual studio code": "vscode",
+    "nodepad": "notepad",
+    "note pad": "notepad",
+}
+
 
 def open_app(app_name: str) -> str:
     app_key = app_name.lower().strip()
+    app_key = APP_ALIASES.get(app_key, app_key)
     target = APP_MAP.get(app_key)
+    resolved_name = app_key
+    if not target:
+        match = difflib.get_close_matches(app_key, APP_MAP.keys(), n=1, cutoff=0.6)
+        if match:
+            resolved_name = match[0]
+            target = APP_MAP[resolved_name]
     if not target:
         return f"I do not know how to open '{app_name}' yet."
     try:
         subprocess.Popen(target)
+        if resolved_name != app_name.lower().strip():
+            return f"Opening {resolved_name} (interpreted from '{app_name}')."
         return f"Opening {app_name}."
     except Exception as exc:
         return f"Could not open {app_name}: {exc}"

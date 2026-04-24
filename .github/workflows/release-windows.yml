@@ -1,0 +1,86 @@
+# Build Windows .exe and publish a GitHub Release when a SemVer tag is pushed (e.g. v1.0.0).
+# Usage:
+#   git tag v1.0.0
+#   git push origin v1.0.0
+
+name: Release Windows (exe)
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Check tag format
+        shell: bash
+        run: |
+          if [[ ! "${{ github.ref_name }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo "::error::Tag must look like vMAJOR.MINOR.PATCH (e.g. v1.0.0), got: ${{ github.ref_name }}"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Pin app version to tag
+        run: python scripts/ci_set_version_from_tag.py "${{ github.ref_name }}"
+
+      - name: Build executable (PyInstaller)
+        run: python -m PyInstaller --noconfirm jarvis.spec
+
+      - name: Create release zip
+        shell: powershell
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $name = "Jarvis-$tag-Windows-x64"
+          if (-not (Test-Path "dist/Jarvis.exe")) { throw "dist/Jarvis.exe missing" }
+          Compress-Archive -Path "dist/Jarvis.exe" -DestinationPath "dist/$name.zip" -Force
+          Get-Item "dist/$name.zip" | Select-Object Name, Length
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2.6.1
+        with:
+          name: "Jarvis ${{ github.ref_name }}"
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          append_body: true
+          body: |
+            ## Windows x64 (portable)
+
+            | | |
+            |---|---|
+            | **Version (tag)** | `${{ github.ref_name }}` |
+            | **Download** | `Jarvis-${{ github.ref_name }}-Windows-x64.zip` (contains `Jarvis.exe`) |
+            | **Build** | [Run #${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+
+            The embedded app `Settings.version` is set to match this tag (without the leading `v`).
+
+            **Run:** Unzip, run `Jarvis.exe`. Copy `.env.example` to `.env` beside the executable if you want file-based env defaults.
+
+            ---
+
+        files: |
+          dist/Jarvis-${{ github.ref_name }}-Windows-x64.zip
+        fail_on_unmatched_files: true

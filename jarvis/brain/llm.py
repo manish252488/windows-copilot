@@ -14,14 +14,25 @@ SYSTEM_PROMPT = (
 
 class JarvisBrain:
     def __init__(self, memory: ConversationMemory) -> None:
-        self.client = OpenAI() if has_valid_openai_key() else None
+        self.client = None
+        self.api_key = settings.openai_api_key or ""
+        self.set_api_key(self.api_key)
         self.memory = memory
+        self.model = settings.openai_model
+
+    def set_api_key(self, api_key: str) -> None:
+        self.api_key = (api_key or "").strip()
+        self.client = OpenAI(api_key=self.api_key) if has_valid_openai_key(self.api_key) else None
+
+    def set_model(self, model: str) -> None:
+        if model.strip():
+            self.model = model.strip()
 
     def reply(self, user_text: str) -> str:
         if self.client is None:
             return (
                 "I can hear you, but my AI brain is offline. "
-                "Set a valid OPENAI_API_KEY in .env and restart me."
+                "Set a valid OpenAI API key in Settings > AI Settings."
             )
 
         self.memory.add("user", user_text)
@@ -29,7 +40,7 @@ class JarvisBrain:
         messages.extend(self.memory.as_chat_messages())
 
         response = self.client.responses.create(
-            model=settings.openai_model,
+            model=self.model,
             input=messages,
             temperature=0.4,
         )

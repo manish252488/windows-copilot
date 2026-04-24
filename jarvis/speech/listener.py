@@ -11,8 +11,36 @@ from jarvis.utils.config import has_valid_openai_key, settings
 class SpeechListener:
     def __init__(self) -> None:
         self.recognizer = sr.Recognizer()
-        self.mic = sr.Microphone()
-        self.client = OpenAI() if has_valid_openai_key() else None
+        self.device_index: int | None = None
+        self.mic = sr.Microphone(device_index=self.device_index)
+        self.api_key = settings.openai_api_key or ""
+        self.client = OpenAI(api_key=self.api_key) if has_valid_openai_key(self.api_key) else None
+        self.wake_word_enabled = settings.wake_word_enabled
+        self.wake_word = (settings.wake_word or "jarvis").strip().lower() or "jarvis"
+
+    @staticmethod
+    def list_microphones() -> list[str]:
+        return sr.Microphone.list_microphone_names()
+
+    def set_device_by_name(self, name: str) -> bool:
+        clean = name.strip().lower()
+        if not clean or clean == "default":
+            self.device_index = None
+            self.mic = sr.Microphone(device_index=None)
+            return True
+        for idx, item in enumerate(self.list_microphones()):
+            if clean in item.lower():
+                self.device_index = idx
+                self.mic = sr.Microphone(device_index=idx)
+                return True
+        return False
+
+    def set_wake_word(self, value: str) -> None:
+        self.wake_word = value.strip().lower() or "jarvis"
+
+    def set_api_key(self, api_key: str) -> None:
+        self.api_key = (api_key or "").strip()
+        self.client = OpenAI(api_key=self.api_key) if has_valid_openai_key(self.api_key) else None
 
     def calibrate(self, seconds: float = 1.0) -> None:
         with self.mic as source:
@@ -38,6 +66,6 @@ class SpeechListener:
         return self.recognizer.recognize_google(audio, language=settings.stt_locale).strip()
 
     def matches_wake_word(self, text: str) -> bool:
-        if not settings.wake_word_enabled:
+        if not self.wake_word_enabled:
             return True
-        return settings.wake_word in text.lower()
+        return self.wake_word in text.lower()

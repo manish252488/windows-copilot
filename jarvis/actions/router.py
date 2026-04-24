@@ -44,9 +44,15 @@ class CommandRouter:
         if "unmute" in text:
             return system.unmute()
 
+        if re.fullmatch(r"(what('| i)?s )?the weather( today)?", text) or text == "weather":
+            return web.get_weather()
+
         weather_match = re.search(r"weather(?: in)? (.+)", text)
         if weather_match:
-            return web.get_weather(weather_match.group(1).strip())
+            city = weather_match.group(1).strip()
+            if city in {"today", "now", "right now"}:
+                return web.get_weather()
+            return web.get_weather(city)
 
         if text.startswith("google "):
             return web.google_search(text.removeprefix("google ").strip())
