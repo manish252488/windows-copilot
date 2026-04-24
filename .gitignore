@@ -7,5 +7,7 @@ __pycache__/
 dist/
 build/
 *.spec
+# Project PyInstaller spec must be in the repo (CI and releases).
+!jarvis.spec
 data/
 installer/output/
