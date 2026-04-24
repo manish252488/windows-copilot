@@ -1,0 +1,47 @@
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+load_dotenv(ROOT_DIR / ".env")
+DEFAULT_DATA_DIR = Path(os.getenv("APPDATA", str(ROOT_DIR))) / "Jarvis"
+
+
+@dataclass(frozen=True)
+class Settings:
+    app_name: str = "Jarvis"
+    version: str = "0.1.0"
+    debug: bool = os.getenv("JARVIS_DEBUG", "0") == "1"
+    openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
+    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    openai_tts_model: str = os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
+    openai_tts_voice: str = os.getenv("OPENAI_TTS_VOICE", "alloy")
+    stt_locale: str = os.getenv("STT_LOCALE", "en-IN")
+    whisper_language: str = os.getenv("WHISPER_LANGUAGE", "en")
+    wake_word_enabled: bool = os.getenv("WAKE_WORD_ENABLED", "1") == "1"
+    wake_word: str = os.getenv("WAKE_WORD", "jarvis").strip().lower()
+    weather_api_key: str | None = os.getenv("WEATHER_API_KEY")
+    news_api_key: str | None = os.getenv("NEWS_API_KEY")
+    user_data_dir: Path = Path(os.getenv("JARVIS_DATA_DIR", DEFAULT_DATA_DIR))
+    default_shell_path: str = os.getenv("JARVIS_SHELL", "powershell")
+    update_manifest_url: str | None = os.getenv("UPDATE_MANIFEST_URL")
+
+
+settings = Settings()
+
+
+def has_valid_openai_key() -> bool:
+    key = (settings.openai_api_key or "").strip()
+    if not key:
+        return False
+    placeholders = {
+        "your_openai_api_key_here",
+        "sk-your-key",
+        "YOUR_OPENAI_KEY",
+    }
+    return key not in placeholders
