@@ -35,13 +35,15 @@ class Settings:
 settings = Settings()
 
 
-def has_valid_openai_key() -> bool:
-    key = (settings.openai_api_key or "").strip()
-    if not key:
+def has_valid_openai_key(key: str | None = None) -> bool:
+    """If `key` is omitted, uses `settings.openai_api_key` (from .env)."""
+    k = (key if key is not None else settings.openai_api_key) or ""
+    k = k.strip()
+    if not k:
         return False
     placeholders = {
         "your_openai_api_key_here",
         "sk-your-key",
         "YOUR_OPENAI_KEY",
     }
-    return key not in placeholders
+    return k not in placeholders

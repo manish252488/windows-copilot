@@ -23,7 +23,7 @@ from jarvis.ui.screens import (
 from jarvis.ui.theme import Theme, THEMES
 from jarvis.updater import check_for_update
 from jarvis.utils.config import has_valid_openai_key, settings
-from jarvis.utils.lucide_icons import any_nav_icon_exists, nav_icon_pair
+from jarvis.utils.lucide_icons import all_nav_raster_pngs_exist, nav_icon_pair
 from jarvis.utils.logger import setup_logger
 from jarvis.utils.user_settings import default_ui_settings, load_ui_settings, save_ui_settings
 
@@ -60,7 +60,11 @@ class JarvisDesktopApp:
 
         self._nav_use_raster: bool = False
         self._nav_icon_pairs: dict[str, tuple[object, object]] = {}
-        self._nav_btn_to_key: dict[tk.Button, str] = {}
+        self._nav: tk.Frame | None = None
+        self._nav_hovered: str | None = None
+        self._nav_canvases: dict[str, tk.Canvas] = {}
+        self._nav_mdl_glyphs: dict[str, str] = {}
+        self._nav_mdl_font: tuple = ("Segoe MDL2 Assets", 24)
         self._build_sidebar()
         self._build_screens()
 
@@ -72,9 +76,12 @@ class JarvisDesktopApp:
         for w in self.sidebar.winfo_children():
             w.destroy()
         self.nav_buttons = {}
-        self._nav_btn_to_key = {}
         self._nav_use_raster = False
         self._nav_icon_pairs = {}
+        self._nav_canvases = {}
+        self._nav_mdl_glyphs = {}
+        self._nav = None
+        self._nav_hovered = None
         self._logo_image = None
 
         top = tk.Frame(self.sidebar, bg=th.sidebar)
@@ -95,7 +102,8 @@ class JarvisDesktopApp:
                 top, text="AI", font=("Segoe UI", 20, "bold"), fg=th.hint, bg=th.sidebar
             )
         self._logo_label.pack()
-        mdl: tuple[str, int] = ("Segoe MDL2 Assets", 20)
+        mdl: tuple[str, int] = ("Segoe MDL2 Assets", 24)
+        self._nav_mdl_font = mdl
         mdl_items: list[tuple[str, str]] = [
             ("home", "\uE80F"),
             ("chat", "\uE8BD"),
@@ -103,9 +111,8 @@ class JarvisDesktopApp:
             ("commands", "\uE945"),
         ]
         nav = tk.Frame(self.sidebar, bg=th.sidebar)
-        nav.pack(expand=True, fill=tk.X, pady=8)
-
-        if any_nav_icon_exists():
+        # Nav directly under the logo, not vertically centered; spacer below fills the rest
+        if all_nav_raster_pngs_exist():
             rasters: list[tuple[str, str]] = [
                 ("home", "home"),
                 ("chat", "chat"),
@@ -123,99 +130,121 @@ class JarvisDesktopApp:
                 self._nav_icon_pairs = candidate
                 self._nav_use_raster = True
                 for key, _ in rasters:
-                    d, a = self._nav_icon_pairs[key]
-                    btn = tk.Button(
-                        nav,
-                        text="",
-                        image=d,
-                        relief=tk.FLAT,
+                    row = tk.Frame(nav, bg=th.sidebar)
+                    row.pack(fill=tk.X, pady=18, padx=0)
+                    c = tk.Canvas(
+                        row,
+                        width=66,
+                        height=66,
                         highlightthickness=0,
                         bd=0,
-                        width=32,
-                        height=28,
+                        bg=th.sidebar,
                         cursor="hand2",
-                        command=lambda k=key: self.show_screen(k),
                     )
-                    btn.pack(pady=4, padx=6, fill=tk.X)
-                    btn.bind(
-                        "<Enter>", lambda _e, b=btn, k=key: self._on_nav_enter(b, k)  # type: ignore
-                    )
-                    btn.bind(
-                        "<Leave>", lambda _e, b=btn, k=key: self._on_nav_leave(b, k)  # type: ignore
-                    )
-                    self.nav_buttons[key] = btn
-                    self._nav_btn_to_key[btn] = key
+                    c.pack(anchor=tk.CENTER, pady=4, padx=4)
+                    c.bind("<Button-1>", lambda _e, k=key: self.show_screen(k))
+                    c.bind("<Enter>", lambda _e, k=key: self._on_nav_enter_canvas(_e, k))
+                    c.bind("<Leave>", lambda _e, k=key: self._on_nav_leave_canvas(_e, k))
+                    self.nav_buttons[key] = c
+                    self._nav_canvases[key] = c
+                self._nav = nav
+                nav.pack(side=tk.TOP, fill=tk.X, pady=(4, 8), padx=0)
+                tk.Frame(self.sidebar, bg=th.sidebar).pack(
+                    side=tk.TOP, fill=tk.BOTH, expand=True
+                )
                 self._style_nav_inactive()
                 self._highlight_active()
                 return
 
         for key, ch in mdl_items:
-            btn = tk.Button(
-                nav,
-                text=ch,
-                relief=tk.FLAT,
-                font=mdl,  # type: ignore[assignment]
+            self._nav_mdl_glyphs[key] = ch
+            row = tk.Frame(nav, bg=th.sidebar)
+            row.pack(fill=tk.X, pady=18, padx=0)
+            c = tk.Canvas(
+                row,
+                width=66,
+                height=66,
                 highlightthickness=0,
                 bd=0,
-                width=1,
+                bg=th.sidebar,
                 cursor="hand2",
-                command=lambda k=key: self.show_screen(k),
             )
-            btn.pack(pady=6, padx=4, fill=tk.X)
-            btn.bind("<Enter>", lambda _e, b=btn, k=key: self._on_nav_enter(b, k))  # type: ignore
-            btn.bind("<Leave>", lambda _e, b=btn, k=key: self._on_nav_leave(b, k))  # type: ignore
-            self.nav_buttons[key] = btn
-            self._nav_btn_to_key[btn] = key
+            c.pack(anchor=tk.CENTER, pady=4, padx=4)
+            c.bind("<Button-1>", lambda _e, k=key: self.show_screen(k))
+            c.bind("<Enter>", lambda _e, k=key: self._on_nav_enter_canvas(_e, k))
+            c.bind("<Leave>", lambda _e, k=key: self._on_nav_leave_canvas(_e, k))
+            self.nav_buttons[key] = c
+            self._nav_canvases[key] = c
+        self._nav = nav
+        nav.pack(side=tk.TOP, fill=tk.X, pady=(4, 8), padx=0)
+        tk.Frame(self.sidebar, bg=th.sidebar).pack(
+            side=tk.TOP, fill=tk.BOTH, expand=True
+        )
         self._style_nav_inactive()
         self._highlight_active()
 
-    def _on_nav_enter(self, btn: tk.Button, key: str) -> None:
-        t = self._nav_theme
+    def _on_nav_enter_canvas(self, _e: object, key: str) -> None:
         if key == self.active_screen:
             return
-        if self._nav_use_raster and key in self._nav_icon_pairs:
-            d, _ = self._nav_icon_pairs[key]
-            btn.configure(bg=t.card_highlight, image=d)
-        else:
-            btn.configure(bg=t.card_highlight, fg=t.text)
+        old = self._nav_hovered
+        self._nav_hovered = key
+        if old and old != key:
+            self._draw_nav_item(old)
+        self._draw_nav_item(key)
 
-    def _on_nav_leave(self, _btn: tk.Button, key: str) -> None:
-        self._set_nav_look_for_key(key)
+    def _on_nav_leave_canvas(self, _e: object, key: str) -> None:
+        if self._nav_hovered == key:
+            self._nav_hovered = None
+        self._draw_nav_item(key)
 
-    def _set_nav_look_for_key(self, key: str) -> None:
-        btn = self.nav_buttons.get(key)
-        if btn is None:
+    def _draw_nav_item(self, key: str) -> None:
+        c = self._nav_canvases.get(key)
+        if c is None:
             return
         t = self._nav_theme
+        c.delete("all")
+        c.configure(bg=t.sidebar, highlightthickness=0)
+        if c.master and isinstance(c.master, tk.Frame):
+            c.master.configure(bg=t.sidebar)
+        w, h = int(c.cget("width")), int(c.cget("height"))
+        cx, cy = w // 2, h // 2
+        r = (min(w, h) - 2) // 2
         on = key == self.active_screen
+        hovered = self._nav_hovered == key
+        if on:
+            c.create_oval(
+                cx - r, cy - r, cx + r, cy + r, fill=t.nav_active, outline="", width=0
+            )
+        elif hovered:
+            c.create_oval(
+                cx - r, cy - r, cx + r, cy + r, fill=t.card_highlight, outline="", width=0
+            )
         if self._nav_use_raster and key in self._nav_icon_pairs:
             d, a = self._nav_icon_pairs[key]
-            btn.configure(
-                image=a if on else d,
-                bg=t.nav_active if on else t.sidebar,
-                highlightthickness=0,
-                highlightbackground=t.nav_active if on else t.sidebar,
-            )
+            im = a if on else d
+            c._nav_icon_ref = im  # type: ignore[attr-defined]
+            c.create_image(cx, cy, image=im)  # type: ignore[union-attr]
         else:
+            ch = self._nav_mdl_glyphs.get(key, "")
             if on:
-                btn.configure(
-                    bg=t.nav_active, fg="#ffffff", highlightthickness=0, highlightbackground=t.nav_active
-                )
+                fill = "#ffffff"
+            elif hovered and not on:
+                fill = t.text
             else:
-                btn.configure(
-                    bg=t.sidebar, fg="#c2cad8", highlightthickness=0, highlightbackground=t.sidebar
-                )
+                fill = "#c2cad8"
+            c.create_text(
+                cx,
+                cy,
+                text=ch,
+                font=self._nav_mdl_font,
+                fill=fill,  # type: ignore[assignment]
+            )
+
+    def _set_nav_look_for_key(self, key: str) -> None:
+        self._draw_nav_item(key)
 
     def _style_nav_inactive(self) -> None:
-        t = self._nav_theme
-        for key, b in self.nav_buttons.items():
-            b.configure(activebackground=t.card_highlight)
-            if not self._nav_use_raster:
-                b.configure(
-                    bg=t.sidebar,
-                    fg="#c2cad8",
-                    activeforeground=t.text,
-                )
+        self._nav_hovered = None
 
     def _build_screens(self) -> None:
         theme = THEMES[self.ui_settings["theme"]]
@@ -312,17 +341,12 @@ class JarvisDesktopApp:
             self.sidebar.configure(bg=theme.sidebar)
             for w in self.sidebar.winfo_children():
                 try:
-                    if isinstance(w, tk.Frame):
-                        w.configure(bg=theme.sidebar)
+                    w.configure(bg=theme.sidebar)
                 except tk.TclError:
                     pass
             if getattr(self, "_logo_label", None) is not None:
                 self._logo_label.configure(bg=theme.sidebar)
-            for b in self.nav_buttons.values():
-                t = self._nav_theme
-                b.configure(
-                    activebackground=t.card_highlight,
-                )
+            self._nav_hovered = None
             self._highlight_active()
             for screen in self.screens.values():
                 screen.apply_theme(theme)
@@ -338,6 +362,9 @@ class JarvisDesktopApp:
         self.running = not self.running
         state = "Listening (hotkey active)" if self.running else "Paused (press F8)"
         self._enqueue("state", state)
+        if not self.running:
+            self._enqueue("mic", "off")
+            self._enqueue("mic_health", "paused")
         if self.running:
             threading.Thread(target=self._loop, daemon=True).start()
 
@@ -376,6 +403,8 @@ class JarvisDesktopApp:
                     self.screens["chat"].add_message("assistant", value, self.ui_settings["animations"])
                 elif key == "mic":
                     self.screens["home"].set_mic_processing(value == "on")
+                elif key == "mic_health":
+                    self.screens["home"].set_mic_health(value)
         except queue.Empty:
             pass
         self.root.after(120, self._drain_queue)
@@ -384,9 +413,11 @@ class JarvisDesktopApp:
         try:
             self.listener.calibrate(0.8)
             self._enqueue("state", "Listening")
+            self._enqueue("mic_health", "ok")
         except Exception as exc:
             self.logger.exception("Microphone calibration failed")
             self._enqueue("state", f"Mic error: {exc}")
+            self._enqueue("mic_health", "err")
             return
 
         while self.running:

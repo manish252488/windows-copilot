@@ -47,6 +47,21 @@ jobs:
       - name: Pin app version to tag
         run: python scripts/ci_set_version_from_tag.py "${{ github.ref_name }}"
 
+      - name: Write .env for release build (repo secret WINDOW_ENV)
+        env:
+          WINDOW_ENV: ${{ secrets.WINDOW_ENV }}
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOW_ENV)) {
+            Write-Error "Set repository secret WINDOW_ENV (Settings → Secrets and variables → Actions) to the full contents of your .env file, then re-run the workflow."
+            exit 1
+          }
+          $path = Join-Path $env:GITHUB_WORKSPACE ".env"
+          $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+          $text = $env:WINDOW_ENV.TrimEnd() + [Environment]::NewLine
+          [IO.File]::WriteAllText($path, $text, $utf8NoBom)
+          Write-Host "Wrote .env for PyInstaller ($(Get-Item $path | ForEach-Object Length) bytes, not logged)."
+
       - name: Build executable (PyInstaller)
         run: python -m PyInstaller --noconfirm jarvis.spec
 
@@ -77,10 +92,10 @@ jobs:
 
             The embedded app `Settings.version` is set to match this tag (without the leading `v`).
 
-            **Run:** Unzip, run `Jarvis.exe`. Copy `.env.example` to `.env` beside the executable if you want file-based env defaults.
+            **Config:** This build bakes the variables from the `WINDOW_ENV` [repository secret](https://docs.github.com/en/actions/security-for-github-actions/security-guides/using-secrets-in-github-actions) into the portable bundle (see `jarvis.spec`). Unzip, run `Jarvis.exe` — [dotenv](https://github.com/theskumar/python-dotenv) load order matches a dev checkout.
 
             ---
 
-        files: |
-          dist/Jarvis-${{ github.ref_name }}-Windows-x64.zip
-        fail_on_unmatched_files: true
+          files: |
+            dist/Jarvis-${{ github.ref_name }}-Windows-x64.zip
+          fail_on_unmatched_files: true

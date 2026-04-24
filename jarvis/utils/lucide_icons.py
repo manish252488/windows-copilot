@@ -25,8 +25,11 @@ def icon_png_path(name: str) -> Path:
     return asset_path("icons", f"{name}.png")
 
 
-def any_nav_icon_exists() -> bool:
-    return icon_png_path("home").is_file()
+def all_nav_raster_pngs_exist() -> bool:
+    for name in ("home", "chat", "settings", "zap"):
+        if not icon_png_path(name).is_file():
+            return False
+    return True
 
 
 def _tint_rgba(im: Any, hex_color: str) -> Any:
@@ -61,7 +64,7 @@ def photo_tinted(path: Path, hex_color: str, master: tk.Misc, size: int | None =
 def nav_icon_pair(
     master: tk.Misc,
     base_name: str,
-    size: int = 22,
+    size: int = 28,
 ) -> tuple[Any, Any]:
     p = icon_png_path(base_name)
     dim = photo_tinted(p, NAV_COLOR_INACTIVE, master, size)
