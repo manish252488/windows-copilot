@@ -1,8 +1,8 @@
-# - Push to `main`: smoke-build Windows exe (validates the pipeline; no GitHub Release).
-# - SemVer tag (e.g. v1.0.0): full build + create GitHub Release and zip asset.
-# Tag usage:
-#   git tag v1.0.0
-#   git push origin v1.0.0
+# - Push to `main`: build Windows exe, then create a pre-release on GitHub with a unique tag
+#   `ci-main-<run_id>`, upload `Jarvis-ci-main-<run_id>-Windows-x64.zip` (contains Jarvis.exe).
+#   (Does not re-run this workflow: tag pattern is not `v*.*.*`.)
+# - SemVer tag (e.g. v1.0.0): versioned build (WINDOW_ENV) + full GitHub Release and zip.
+#   git tag v1.0.0 && git push origin v1.0.0
 
 name: Release Windows (exe)
 
@@ -21,7 +21,7 @@ permissions:
   contents: write
 
 jobs:
-  # Runs on every push to main; no tag, no secrets, no release (PyInstaller is enough to validate the tree).
+  # Build from main, publish a GitHub pre-release (tag ci-main-*) with the zip attached.
   build-main:
     if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
@@ -46,6 +46,44 @@ jobs:
 
       - name: Check artifact
         run: if (-not (Test-Path "dist/Jarvis.exe")) { throw "dist/Jarvis.exe missing" }
+
+      - name: Create release zip
+        id: pack
+        shell: powershell
+        run: |
+          $id = "${{ github.run_id }}"
+          $name = "Jarvis-ci-main-$id-Windows-x64"
+          Compress-Archive -Path "dist/Jarvis.exe" -DestinationPath "dist/$name.zip" -Force
+          Get-Item "dist/$name.zip" | Select-Object Name, Length
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "asset_name=$name.zip"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "tag=ci-main-$id"
+
+      - name: Create GitHub pre-release
+        uses: softprops/action-gh-release@v2.6.1
+        with:
+          tag_name: ${{ steps.pack.outputs.tag }}
+          name: "CI main #${{ github.run_number }} (${{ steps.pack.outputs.tag }})"
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          make_latest: false
+          generate_release_notes: true
+          append_body: true
+          body: |
+            ## Windows x64 (portable) — from `main`
+
+            | | |
+            |---|---|
+            | **Tag** | `${{ steps.pack.outputs.tag }}` |
+            | **Commit** | `${{ github.sha }}` |
+            | **Download** | `${{ steps.pack.outputs.asset_name }}` (contains `Jarvis.exe`) |
+            | **Build** | [Run #${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+
+            No baked `.env` in this path (unlike a SemVer tag release with `WINDOW_ENV`). Unzip, run `Jarvis.exe` and configure as needed.
+
+            ---
+
+          files: dist/${{ steps.pack.outputs.asset_name }}
+          fail_on_unmatched_files: true
 
   build-and-release:
     if: startsWith(github.ref, 'refs/tags/v')
