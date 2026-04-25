@@ -53,8 +53,8 @@ class JarvisDesktopApp:
         self._last_tts_text = ""
         self._last_tts_end_monotonic = 0.0
         self._post_tts_cooldown_sec = 1.0
-        self._pending_git_command: str | None = None
-        self._pending_git_repo: str | None = None
+        self._pending_git_popup_command: str | None = None
+        self._pending_git_popup_repo: str | None = None
         self.voice_muted = not self.ui_settings.get("sound", True)
         th0 = THEMES.get(self.ui_settings.get("theme", "Neon") or "Neon", THEMES["Neon"])
         self._nav_theme: Theme = th0
@@ -449,6 +449,8 @@ class JarvisDesktopApp:
                     self.screens["home"].set_mic_processing(value == "on")
                 elif key == "mic_health":
                     self.screens["home"].set_mic_health(value)
+                elif key == "git_confirm":
+                    self._handle_git_confirm_popup()
         except queue.Empty:
             pass
         self.root.after(120, self._drain_queue)
@@ -513,16 +515,6 @@ class JarvisDesktopApp:
         return overlap >= 0.7
 
     @staticmethod
-    def _is_yes_text(text: str) -> bool:
-        s = (text or "").strip().lower()
-        return s in {"yes", "yeah", "yep", "confirm", "ok", "okay", "do it", "proceed"}
-
-    @staticmethod
-    def _is_no_text(text: str) -> bool:
-        s = (text or "").strip().lower()
-        return s in {"no", "nope", "cancel", "stop", "dont", "don't", "not now"}
-
-    @staticmethod
     def _extract_git_request_command(text: str) -> str | None:
         t = (text or "").strip()
         tl = t.lower()
@@ -543,16 +535,45 @@ class JarvisDesktopApp:
     def _begin_git_approval(self, git_command: str) -> str:
         repo = developer.resolve_git_repo_path()
         if not repo:
-            self._pending_git_command = None
-            self._pending_git_repo = None
+            self._pending_git_popup_command = None
+            self._pending_git_popup_repo = None
             return "I could not find a git repository. Tell me the project folder path first."
-        self._pending_git_command = git_command.strip()
-        self._pending_git_repo = repo
-        return (
-            f"Git action requested.\nRepo: {repo}\n"
-            f"Command: {self._pending_git_command}\n"
-            "Should I execute this? Say yes or no."
+        self._pending_git_popup_command = git_command.strip()
+        self._pending_git_popup_repo = repo
+        self._enqueue("git_confirm", "1")
+        return "Git confirmation popup opened."
+
+    def _handle_git_confirm_popup(self) -> None:
+        cmd = self._pending_git_popup_command
+        repo = self._pending_git_popup_repo
+        self._pending_git_popup_command = None
+        self._pending_git_popup_repo = None
+        if not cmd or not repo:
+            return
+        approved = messagebox.askyesno(
+            "Confirm Git Action",
+            f"Repository:\n{repo}\n\nCommand:\n{cmd}\n\nExecute this command?",
         )
+        if not approved:
+            self._enqueue("chat_assistant", "Okay, I cancelled that git command.")
+            self._enqueue("snippet", "Jarvis: Git command cancelled.")
+            return
+        self._enqueue("chat_assistant", f"Executing in repo: {repo}\nCommand: {cmd}")
+        self._enqueue("snippet", f"Jarvis: Executing git in {repo}")
+        threading.Thread(
+            target=self._execute_git_command_after_approval,
+            args=(cmd, repo),
+            daemon=True,
+        ).start()
+
+    def _execute_git_command_after_approval(self, cmd: str, repo: str) -> None:
+        try:
+            output = self.router.route_many(cmd) or "Git command finished with no output."
+            self._enqueue("chat_assistant", f"Repo: {repo}\n{output}")
+            self._enqueue("snippet", f"Jarvis: Git action completed in {repo}")
+        except Exception as exc:
+            self.logger.exception("Git command execution after approval failed")
+            self._enqueue("chat_assistant", f"Git action failed: {exc}")
 
     def _process_text(self, text: str) -> None:
         self._enqueue("chat_user", text)
@@ -560,26 +581,13 @@ class JarvisDesktopApp:
         self._enqueue("state", "Thinking")
         try:
             action_result: str | None = None
-            if self._pending_git_command:
-                if self._is_yes_text(text):
-                    cmd = self._pending_git_command
-                    repo = self._pending_git_repo or "unknown"
-                    self._pending_git_command = None
-                    self._pending_git_repo = None
-                    executed = self.router.route_many(cmd) or "Git command was not executed."
-                    action_result = f"Executing in repo: {repo}\n{executed}"
-                elif self._is_no_text(text):
-                    self._pending_git_command = None
-                    self._pending_git_repo = None
-                    action_result = "Okay, I cancelled that git command."
-                else:
-                    action_result = "Please say yes to execute the pending git command, or no to cancel."
+            suppress_tts = False
+            git_request = self._extract_git_request_command(text)
+            if git_request:
+                action_result = self._begin_git_approval(git_request)
+                suppress_tts = True
             else:
-                git_request = self._extract_git_request_command(text)
-                if git_request:
-                    action_result = self._begin_git_approval(git_request)
-                else:
-                    action_result = self.router.route_many(text)
+                action_result = self.router.route_many(text)
             if action_result is None:
                 llm_reply = self.brain.reply(text)
                 ai_cmd = self.brain.extract_command(llm_reply)
@@ -587,6 +595,7 @@ class JarvisDesktopApp:
                     ai_git = self._extract_git_request_command(ai_cmd)
                     if ai_git:
                         action_result = self._begin_git_approval(ai_git)
+                        suppress_tts = True
                     else:
                         routed = self.router.route_many(ai_cmd)
                         if routed:
@@ -602,7 +611,7 @@ class JarvisDesktopApp:
                 action_result = action_result[:320]
             self._enqueue("chat_assistant", action_result)
             self._enqueue("snippet", f"Jarvis: {action_result}")
-            if self.ui_settings["sound"]:
+            if self.ui_settings["sound"] and not suppress_tts:
                 self._enqueue("state", "Speaking")
                 self._tts_active = True
                 self._last_tts_text = action_result

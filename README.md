@@ -111,7 +111,7 @@ installer/
 ### Build executable (stable name for reputation)
 
 ```powershell
-./scripts/build_exe.ps1 -Version 0.1.0
+./scripts/build_exe.ps1 -Version 1.0.0
 ```
 
 - Produces `dist/Jarvis-Assistant/Jarvis-Assistant.exe`.
@@ -119,10 +119,10 @@ installer/
 ### Build installer (Inno Setup required)
 
 ```powershell
-./scripts/build_installer.ps1 -Version 0.1.0
+./scripts/build_installer.ps1 -Version 1.0.0
 ```
 
-- Produces `installer/output/Jarvis-Assistant-Setup-0.1.0.exe`.
+- Produces `installer/output/Jarvis-Assistant-Setup-1.0.0.exe`.
 - Includes standard uninstall entry, Start Menu shortcut, optional desktop shortcut, and modern setup UI.
 - Uses stable app and file names to improve SmartScreen reputation over time.
 

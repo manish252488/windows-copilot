@@ -15,7 +15,7 @@ DEFAULT_DATA_DIR = Path(os.getenv("APPDATA", str(ROOT_DIR))) / "Jarvis"
 @dataclass(frozen=True)
 class Settings:
     app_name: str = "Jarvis"
-    version: str = "0.1.0"
+    version: str = "1.0.0"
     debug: bool = os.getenv("JARVIS_DEBUG", "0") == "1"
     openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")

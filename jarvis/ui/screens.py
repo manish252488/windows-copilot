@@ -255,7 +255,8 @@ class HomeScreen(BaseScreen):
         self._send_hover_t = 0.0
         self._send_hover_after: str | None = None
         self._snippet_lines: list[str] = []
-        self._snippet_queue: list[str] = []
+        self._snippet_kinds: list[str] = []
+        self._snippet_queue: list[tuple[str, str]] = []
         self._snippet_anim_after: str | None = None
 
         self._input_block = tk.Frame(self, bg=t.bg)
@@ -360,19 +361,32 @@ class HomeScreen(BaseScreen):
         )
         self._style_api_key_hint(t)
 
-        self.snippet_label = tk.Label(
+        self.snippet_label = tk.Text(
             self._stack,
-            textvariable=self.snippet_var,
             font=("Segoe UI", 11),
-            wraplength=520,
-            justify=tk.CENTER,
+            wrap=tk.WORD,
             height=self.SNIPPET_MAX_LINES,
-            anchor="n",
+            width=64,
+            relief="flat",
+            bd=0,
+            borderwidth=0,
+            highlightthickness=0,
+            highlightbackground=t.bg,
+            highlightcolor=t.bg,
+            cursor="arrow",
+            state=tk.DISABLED,
         )
         self.snippet_label.pack(pady=(0, 22))
         self.snippet_label.configure(
-            fg=_lerp_color_hex(t.text_dim, t.bg, 0.18),
             bg=t.bg,
+        )
+        self.snippet_label.tag_configure("heard", foreground="#5dd27c", justify="center")
+        self.snippet_label.tag_configure("user", foreground="#a974ff", justify="center")
+        self.snippet_label.tag_configure(
+            "jarvis", foreground=_lerp_color_hex(t.text_dim, t.bg, 0.12), justify="center"
+        )
+        self.snippet_label.tag_configure(
+            "default", foreground=_lerp_color_hex(t.text_dim, t.bg, 0.18), justify="center"
         )
 
         self.after(0, self._install_rounded_home_buttons)
@@ -695,8 +709,28 @@ class HomeScreen(BaseScreen):
         clean = (text or "").strip()
         if not clean:
             return
-        self._snippet_queue.extend(self._chunk_snippet_text(clean))
+        kind = self._snippet_kind(clean)
+        self._snippet_queue.extend((kind, chunk) for chunk in self._chunk_snippet_text(clean))
         self._run_snippet_animation()
+
+    @staticmethod
+    def _snippet_kind(text: str) -> str:
+        low = text.lower().strip()
+        if low.startswith("heard:"):
+            return "heard"
+        if low.startswith("user:"):
+            return "user"
+        if low.startswith("jarvis:"):
+            return "jarvis"
+        return "default"
+
+    def _render_snippet_lines(self) -> None:
+        box = self.snippet_label
+        box.configure(state=tk.NORMAL)
+        box.delete("1.0", tk.END)
+        for kind, line in zip(self._snippet_kinds, self._snippet_lines):
+            box.insert(tk.END, f"{line}\n", kind)
+        box.configure(state=tk.DISABLED)
 
     def _chunk_snippet_text(self, text: str) -> list[str]:
         words = text.split()
@@ -729,10 +763,12 @@ class HomeScreen(BaseScreen):
             if not self._snippet_queue:
                 self._snippet_anim_after = None
                 return
-            nxt = self._snippet_queue.pop(0)
+            kind, nxt = self._snippet_queue.pop(0)
             self._snippet_lines.append(nxt)
+            self._snippet_kinds.append(kind)
             self._snippet_lines = self._snippet_lines[-self.SNIPPET_MAX_LINES :]
-            self.snippet_var.set("\n".join(self._snippet_lines))
+            self._snippet_kinds = self._snippet_kinds[-self.SNIPPET_MAX_LINES :]
+            self._render_snippet_lines()
             self._snippet_anim_after = self.after(self.SNIPPET_ANIM_MS, tick)
 
         tick()
@@ -798,9 +834,23 @@ class HomeScreen(BaseScreen):
         self.state_label.configure(fg=t.text, bg=t.bg)
         self._style_api_key_hint(t)
         self.snippet_label.configure(
-            fg=_lerp_color_hex(t.text_dim, t.bg, 0.18),
             bg=t.bg,
+            insertbackground=t.text,
+            borderwidth=0,
+            relief="flat",
+            highlightthickness=0,
+            highlightbackground=t.bg,
+            highlightcolor=t.bg,
         )
+        self.snippet_label.tag_configure("heard", foreground="#5dd27c", justify="center")
+        self.snippet_label.tag_configure("user", foreground="#a974ff", justify="center")
+        self.snippet_label.tag_configure(
+            "jarvis", foreground=_lerp_color_hex(t.text_dim, t.bg, 0.12), justify="center"
+        )
+        self.snippet_label.tag_configure(
+            "default", foreground=_lerp_color_hex(t.text_dim, t.bg, 0.18), justify="center"
+        )
+        self._render_snippet_lines()
         self._refresh_send_button_style()
         self._redraw_home_input_pill()
 

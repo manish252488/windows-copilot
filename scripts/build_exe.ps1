@@ -1,6 +1,6 @@
 param(
     [string]$AppName = "Jarvis-Assistant",
-    [string]$Version = "0.1.0"
+    [string]$Version = "1.0.0"
 )
 
 python -m PyInstaller `
