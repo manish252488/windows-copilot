@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 import queue
+import re
 import threading
+import time
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import PhotoImage
 
 import speech_recognition as sr
+try:
+    import ttkbootstrap as tb
+except Exception:  # pragma: no cover - optional UI dependency fallback
+    tb = None  # type: ignore[assignment]
 
+from jarvis.actions import developer
 from jarvis.actions.router import CommandRouter
 from jarvis.brain.llm import JarvisBrain
 from jarvis.brain.memory import ConversationMemory
@@ -37,20 +44,32 @@ class JarvisDesktopApp:
         self.brain = JarvisBrain(self.memory)
         self.router = CommandRouter()
         self.event_queue: queue.Queue[tuple[str, str]] = queue.Queue()
-        self.running = True
         self.active_screen = "home"
         self.ui_settings = {**default_ui_settings(), **load_ui_settings()}
+        self.running = bool(self.ui_settings.get("mic_enabled", True))
+        self._listener_thread: threading.Thread | None = None
+        self._tts_active = False
+        self._assistant_busy = False
+        self._last_tts_text = ""
+        self._last_tts_end_monotonic = 0.0
+        self._post_tts_cooldown_sec = 1.0
+        self._pending_git_command: str | None = None
+        self._pending_git_repo: str | None = None
         self.voice_muted = not self.ui_settings.get("sound", True)
         th0 = THEMES.get(self.ui_settings.get("theme", "Neon") or "Neon", THEMES["Neon"])
         self._nav_theme: Theme = th0
         self._logo_image: object | None = None
 
-        self.root = tk.Tk()
+        if tb is not None:
+            self.root = tb.Window(themename="darkly")
+        else:
+            self.root = tk.Tk()
         self.root.title(f"{settings.app_name} {settings.version}")
         self.root.geometry("1024x700")
         self.root.minsize(920, 600)
         self.root.configure(bg=th0.bg)
         self.root.bind("<F8>", lambda _: self.toggle_listening())
+        self._apply_modern_theme(self.ui_settings.get("theme", "Neon"))
 
         self.sidebar = tk.Frame(self.root, width=110, bg=th0.sidebar)
         self.sidebar.pack(side="left", fill="y")
@@ -69,7 +88,12 @@ class JarvisDesktopApp:
         self._build_screens()
 
         self.root.after(120, self._drain_queue)
-        threading.Thread(target=self._loop, daemon=True).start()
+        if self.running:
+            self._ensure_listener_thread()
+        else:
+            self._enqueue("state", "Mic Off")
+            self._enqueue("mic", "off")
+            self._enqueue("mic_health", "paused")
 
     def _build_sidebar(self) -> None:
         th = self._nav_theme
@@ -254,7 +278,7 @@ class JarvisDesktopApp:
             "home": HomeScreen(
                 self.content,
                 theme,
-                self.toggle_voice_mute,
+                self.toggle_listening,
                 self._run_manual_command,
             ),
             "chat": ConversationScreen(self.content, theme),
@@ -274,7 +298,7 @@ class JarvisDesktopApp:
             frame.place(x=0, y=0, relwidth=1, relheight=1)
         # Ensure Home is visible first; show_screen no-ops when target is already active.
         self.screens["home"].lift()
-        self.screens["home"].set_muted(self.voice_muted)
+        self.screens["home"].set_listening_enabled(self.running)
         self._apply_settings(self.ui_settings.copy(), persist=False)
 
     def _highlight_active(self) -> None:
@@ -322,13 +346,12 @@ class JarvisDesktopApp:
         self.listener.set_api_key(api_key)
         self._refresh_api_warning()
         self.speaker.set_volume(payload.get("volume", 1.0))
+        self.listener.set_noise_cancellation_level(payload.get("noise_cancellation_level", 5))
         self.voice_muted = not payload.get("sound", True)
-        self.screens["home"].set_muted(self.voice_muted)
         selected_model = payload.get("model")
         if selected_model:
             self.brain.set_model(selected_model)
-        wake_word = (payload.get("wake_word") or "jarvis").strip().lower()
-        self.listener.set_wake_word(wake_word)
+        self.set_listening(bool(payload.get("mic_enabled", self.running)))
         mic_name = payload.get("mic", "Default")
         self.listener.set_device_by_name(mic_name)
         self.speaker.set_voice_by_name(payload.get("voice", "Default"))
@@ -336,6 +359,7 @@ class JarvisDesktopApp:
         if theme_name in THEMES:
             theme = THEMES[theme_name]
             self._nav_theme = theme
+            self._apply_modern_theme(theme_name)
             self.root.configure(bg=theme.bg)
             self.content.configure(bg=theme.bg)
             self.sidebar.configure(bg=theme.sidebar)
@@ -351,6 +375,23 @@ class JarvisDesktopApp:
             for screen in self.screens.values():
                 screen.apply_theme(theme)
 
+    def _apply_modern_theme(self, theme_name: str) -> None:
+        if tb is None:
+            return
+        theme_map = {
+            "Neon": "darkly",
+            "Dark": "superhero",
+            "Minimal": "flatly",
+        }
+        bootstrap_theme = theme_map.get(theme_name, "darkly")
+        try:
+            style = tb.Style()
+            if style.theme.name != bootstrap_theme:
+                style.theme_use(bootstrap_theme)
+        except Exception:
+            # Keep the app usable even if bootstrap theme switch fails at runtime.
+            return
+
     def _check_updates(self) -> None:
         try:
             available, message = check_for_update(settings.version)
@@ -358,25 +399,28 @@ class JarvisDesktopApp:
         except Exception as exc:
             messagebox.showerror("Update error", str(exc))
 
-    def toggle_listening(self) -> None:
-        self.running = not self.running
-        state = "Listening (hotkey active)" if self.running else "Paused (press F8)"
+    def _ensure_listener_thread(self) -> None:
+        if self._listener_thread is not None and self._listener_thread.is_alive():
+            return
+        self._listener_thread = threading.Thread(target=self._loop, daemon=True)
+        self._listener_thread.start()
+
+    def set_listening(self, enabled: bool) -> None:
+        self.running = enabled
+        self.ui_settings["mic_enabled"] = enabled
+        state = "Listening..." if enabled else "Mic Off"
         self._enqueue("state", state)
-        if not self.running:
+        self.screens["home"].set_listening_enabled(enabled)
+        if not enabled:
             self._enqueue("mic", "off")
             self._enqueue("mic_health", "paused")
-        if self.running:
-            threading.Thread(target=self._loop, daemon=True).start()
-
-    def toggle_voice_mute(self) -> None:
-        self.voice_muted = not self.voice_muted
-        self.ui_settings["sound"] = not self.voice_muted
-        self.screens["home"].set_muted(self.voice_muted)
-        if self.voice_muted:
             self.speaker.interrupt()
-            self._enqueue("state", "Muted")
         else:
-            self._enqueue("state", "Listening")
+            self._enqueue("mic_health", "ok")
+            self._ensure_listener_thread()
+
+    def toggle_listening(self) -> None:
+        self.set_listening(not self.running)
 
     def _refresh_api_warning(self) -> None:
         if has_valid_openai_key(self.ui_settings.get("openai_api_key")):
@@ -410,30 +454,27 @@ class JarvisDesktopApp:
         self.root.after(120, self._drain_queue)
 
     def _loop(self) -> None:
-        try:
-            self.listener.calibrate(0.8)
-            self._enqueue("state", "Listening")
-            self._enqueue("mic_health", "ok")
-        except Exception as exc:
-            self.logger.exception("Microphone calibration failed")
-            self._enqueue("state", f"Mic error: {exc}")
-            self._enqueue("mic_health", "err")
-            return
+        if self.running:
+            self._enqueue("state", "Listening...")
+        self._enqueue("mic_health", "ok")
 
         while self.running:
             try:
+                if self._assistant_busy or self._tts_active:
+                    self._enqueue("mic", "off")
+                    time.sleep(0.08)
+                    continue
                 self._enqueue("mic", "on")
                 text = self.listener.listen_once()
                 self._enqueue("mic", "off")
                 if not text:
                     continue
-                if not self.listener.matches_wake_word(text):
-                    self._enqueue("state", f"Say '{self.listener.wake_word}' to activate")
+                if self._should_ignore_recognized_text(text):
+                    self._enqueue("snippet", "Ignored echo/noise input")
                     continue
-                cleaned = text.replace(self.listener.wake_word, "").strip(",. ").strip()
-                if not cleaned:
-                    continue
-                self._run_manual_command(cleaned)
+                # Always surface speech-to-text on Home as soon as it is recognized.
+                self._enqueue("snippet", f"Heard: {text}")
+                self._run_manual_command(text.strip())
             except sr.WaitTimeoutError:
                 self._enqueue("mic", "off")
                 continue
@@ -443,28 +484,137 @@ class JarvisDesktopApp:
                 self._enqueue("state", f"Error: {exc}")
 
     def _run_manual_command(self, text: str) -> None:
+        # Pause listening while the assistant is processing/speaking to avoid feedback loops.
+        self._assistant_busy = True
         threading.Thread(target=self._process_text, args=(text,), daemon=True).start()
+
+    @staticmethod
+    def _normalize_text_for_compare(text: str) -> str:
+        s = (text or "").lower()
+        s = re.sub(r"https?://", "", s)
+        s = re.sub(r"www\.", "", s)
+        s = re.sub(r"[^a-z0-9\s]", " ", s)
+        return " ".join(s.split())
+
+    def _should_ignore_recognized_text(self, heard_text: str) -> bool:
+        now = time.monotonic()
+        # Audio tail suppression right after TTS stops.
+        if now - self._last_tts_end_monotonic < self._post_tts_cooldown_sec:
+            return True
+        heard_norm = self._normalize_text_for_compare(heard_text)
+        tts_norm = self._normalize_text_for_compare(self._last_tts_text)
+        if not heard_norm or not tts_norm:
+            return False
+        heard_tokens = heard_norm.split()
+        tts_tokens = set(tts_norm.split())
+        if not heard_tokens:
+            return False
+        overlap = sum(1 for tok in heard_tokens if tok in tts_tokens) / len(heard_tokens)
+        return overlap >= 0.7
+
+    @staticmethod
+    def _is_yes_text(text: str) -> bool:
+        s = (text or "").strip().lower()
+        return s in {"yes", "yeah", "yep", "confirm", "ok", "okay", "do it", "proceed"}
+
+    @staticmethod
+    def _is_no_text(text: str) -> bool:
+        s = (text or "").strip().lower()
+        return s in {"no", "nope", "cancel", "stop", "dont", "don't", "not now"}
+
+    @staticmethod
+    def _extract_git_request_command(text: str) -> str | None:
+        t = (text or "").strip()
+        tl = t.lower()
+        if tl.startswith("git commit and push"):
+            return t
+        if tl.startswith("commit and push"):
+            return t
+        if tl.startswith("git commit"):
+            return t
+        if "git status" in tl:
+            return "git status"
+        if "git pull" in tl:
+            return "git pull"
+        if "git push" in tl:
+            return "git push"
+        return None
+
+    def _begin_git_approval(self, git_command: str) -> str:
+        repo = developer.resolve_git_repo_path()
+        if not repo:
+            self._pending_git_command = None
+            self._pending_git_repo = None
+            return "I could not find a git repository. Tell me the project folder path first."
+        self._pending_git_command = git_command.strip()
+        self._pending_git_repo = repo
+        return (
+            f"Git action requested.\nRepo: {repo}\n"
+            f"Command: {self._pending_git_command}\n"
+            "Should I execute this? Say yes or no."
+        )
 
     def _process_text(self, text: str) -> None:
         self._enqueue("chat_user", text)
         self._enqueue("snippet", f"User: {text}")
         self._enqueue("state", "Thinking")
         try:
-            action_result = self.router.route_many(text)
+            action_result: str | None = None
+            if self._pending_git_command:
+                if self._is_yes_text(text):
+                    cmd = self._pending_git_command
+                    repo = self._pending_git_repo or "unknown"
+                    self._pending_git_command = None
+                    self._pending_git_repo = None
+                    executed = self.router.route_many(cmd) or "Git command was not executed."
+                    action_result = f"Executing in repo: {repo}\n{executed}"
+                elif self._is_no_text(text):
+                    self._pending_git_command = None
+                    self._pending_git_repo = None
+                    action_result = "Okay, I cancelled that git command."
+                else:
+                    action_result = "Please say yes to execute the pending git command, or no to cancel."
+            else:
+                git_request = self._extract_git_request_command(text)
+                if git_request:
+                    action_result = self._begin_git_approval(git_request)
+                else:
+                    action_result = self.router.route_many(text)
             if action_result is None:
-                action_result = self.brain.reply(text)
+                llm_reply = self.brain.reply(text)
+                ai_cmd = self.brain.extract_command(llm_reply)
+                if ai_cmd:
+                    ai_git = self._extract_git_request_command(ai_cmd)
+                    if ai_git:
+                        action_result = self._begin_git_approval(ai_git)
+                    else:
+                        routed = self.router.route_many(ai_cmd)
+                        if routed:
+                            action_result = routed
+                        else:
+                            action_result = (
+                                f"I planned this action but could not execute it yet: {ai_cmd}. "
+                                "Try saying it in a different way."
+                            )
+                else:
+                    action_result = llm_reply
             if self.ui_settings["response_style"] == "concise":
                 action_result = action_result[:320]
             self._enqueue("chat_assistant", action_result)
             self._enqueue("snippet", f"Jarvis: {action_result}")
             if self.ui_settings["sound"]:
                 self._enqueue("state", "Speaking")
+                self._tts_active = True
+                self._last_tts_text = action_result
                 self.speaker.speak(action_result)
         except Exception as exc:
             self.logger.exception("Text processing failed")
             self._enqueue("chat_assistant", f"Error: {exc}")
         finally:
-            self._enqueue("state", "Listening")
+            self._tts_active = False
+            self._last_tts_end_monotonic = time.monotonic()
+            self._assistant_busy = False
+            self._enqueue("state", "Listening..." if self.running else "Mic Off")
 
     def run(self) -> None:
         self.root.mainloop()

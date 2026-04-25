@@ -23,9 +23,16 @@ class Settings:
     openai_tts_voice: str = os.getenv("OPENAI_TTS_VOICE", "alloy")
     stt_locale: str = os.getenv("STT_LOCALE", "en-IN")
     whisper_language: str = os.getenv("WHISPER_LANGUAGE", "en")
-    wake_word_enabled: bool = os.getenv("WAKE_WORD_ENABLED", "1") == "1"
-    wake_word: str = os.getenv("WAKE_WORD", "jarvis").strip().lower()
+    stt_timeout_seconds: int = int(os.getenv("STT_TIMEOUT_SECONDS", "6"))
+    stt_phrase_time_limit_seconds: int = int(os.getenv("STT_PHRASE_TIME_LIMIT_SECONDS", "20"))
+    stt_pause_threshold_seconds: float = float(os.getenv("STT_PAUSE_THRESHOLD_SECONDS", "2.0"))
+    stt_openai_prompt: str = os.getenv(
+        "STT_OPENAI_PROMPT",
+        "Indian English accent. Keep words exact. Preserve product names and commands.",
+    )
     weather_api_key: str | None = os.getenv("WEATHER_API_KEY")
+    weather_default_city: str = os.getenv("WEATHER_DEFAULT_CITY", "")
+    weather_country_code: str = os.getenv("WEATHER_COUNTRY_CODE", "IN")
     news_api_key: str | None = os.getenv("NEWS_API_KEY")
     user_data_dir: Path = Path(os.getenv("JARVIS_DATA_DIR", DEFAULT_DATA_DIR))
     default_shell_path: str = os.getenv("JARVIS_SHELL", "powershell")

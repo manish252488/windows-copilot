@@ -18,12 +18,13 @@ def default_ui_settings() -> dict:
     return {
         "theme": "Neon",
         "openai_api_key": "",
-        "wake_word": (s.wake_word or "jarvis").strip().lower() or "jarvis",
+        "mic_enabled": False,
         "animations": True,
         "sound": True,
         "response_style": "concise",
         "model": s.openai_model,
         "mic": "Default",
+        "noise_cancellation_level": 5,
         "voice": "Default",
         "volume": 1.0,
     }

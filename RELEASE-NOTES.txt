@@ -1,0 +1,32 @@
+Jarvis Assistant - Windows Install Notes
+=======================================
+
+If Windows shows a SmartScreen warning:
+1. Click "More info"
+2. Click "Run anyway"
+
+Why this happens:
+- The app is not yet signed with a trusted commercial code-signing certificate.
+- This does not automatically mean the file is unsafe.
+
+Trust and reputation guidance:
+- Keep release file names stable:
+  - Jarvis-Assistant.exe
+  - Jarvis-Assistant-Setup-<version>.exe
+- Keep publisher name stable: Manish Singh
+- Avoid random renames each release, because SmartScreen reputation builds over time.
+
+Recommended release format:
+- Publish direct .exe and installer (.setup.exe style) in GitHub Releases.
+- Avoid shipping only ZIP files.
+
+Optional self-signing (local, free):
+1. Create cert:
+   New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Manish Singh"
+2. Sign binary:
+   signtool sign /fd SHA256 /a Jarvis-Assistant.exe
+
+Note: self-signing shows a publisher identity, but does not provide broad trust like a CA-issued certificate.
+
+Advanced option:
+- MSIX packaging can improve install UX and modernization, but signing is still required for full trust.

@@ -23,9 +23,10 @@ def _hex(s: str) -> tuple[int, int, int]:
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
 
 
-def _radius_for(w: int, h: int) -> int:
+def _radius_for(w: int, h: int, *, override: int | None = None) -> int:
     m = min(w, h) // 2 - 1
-    return min(BUTTON_CORNER_RADIUS, max(0, m))
+    base = BUTTON_CORNER_RADIUS if override is None else int(override)
+    return min(base, max(0, m))
 
 
 def _parent_bg(button: tk.Button, theme: Theme) -> str:
@@ -97,7 +98,8 @@ def _round_draw(
     lock = getattr(button, "_round_size_lock", None)  # type: ignore[assignment, attr-defined]
     if lock is not None:
         w, h = int(lock[0]), int(lock[1])
-    r = _radius_for(w, h)
+    corner_override = getattr(button, "_round_corner_override", None)  # type: ignore[assignment, attr-defined]
+    r = _radius_for(w, h, override=corner_override)
     pbg = _parent_bg(button, t)
     hov = bool(getattr(button, "_round_hovered", False))
 
