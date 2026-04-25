@@ -1,13 +1,13 @@
 param(
-    [string]$AppName = "Jarvis",
-    [string]$Version = "0.1.0"
+    [string]$AppName = "Jarvis-Assistant",
+    [string]$Version = "1.0.0"
 )
 
 python -m PyInstaller `
   --noconfirm `
   --windowed `
-  --name "$AppName-$Version" `
+  --name "$AppName" `
   --add-data ".env.example;." `
   main.py
 
-Write-Host "Executable created in dist/$AppName-$Version"
+Write-Host "Executable created in dist/$AppName"

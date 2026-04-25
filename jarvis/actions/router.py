@@ -67,6 +67,17 @@ class CommandRouter:
             return developer.git_status()
         if "git pull" in text:
             return developer.git_pull()
+        if text.startswith("git commit and push"):
+            msg = text.removeprefix("git commit and push").strip(" :,-")
+            return developer.git_commit_and_push(msg or "Update from Jarvis")
+        if text.startswith("commit and push"):
+            msg = text.removeprefix("commit and push").strip(" :,-")
+            return developer.git_commit_and_push(msg or "Update from Jarvis")
+        if text.startswith("git commit "):
+            msg = text.removeprefix("git commit ").strip()
+            return developer.git_commit(msg or "Update from Jarvis")
+        if text == "git commit":
+            return developer.git_commit()
         if "git push" in text:
             return developer.git_push()
 

@@ -12,12 +12,13 @@ A modular voice assistant with a multi-screen Tkinter UI, speech input, LLM reas
   - Windows controls (open/close apps, volume, lock, shutdown, restart, file search)
   - Web actions (open website, Google search, YouTube search, weather, news)
   - Developer actions (terminal commands, git status/pull/push)
-- Optional wake-word mode (`jarvis` by default), passive listening, and `F8` hotkey pause/resume.
+- Microphone toggle mode with `F8` hotkey pause/resume.
 - Multi-screen desktop UI:
   - Home (state + pulse visualization + latest snippet)
   - Conversation (full history + search + copy response)
   - Settings (theme/audio/AI/update controls)
   - Command Center (quick action cards)
+- Refined visuals using `ttkbootstrap` (modern themed Tk UI) with existing custom animations.
 - Persistent memory + rotating logs.
 - Buildable `.exe`, installer, uninstall entry (via Inno Setup), and update checker.
 
@@ -67,6 +68,10 @@ installer/
    - Optional speech tuning:
      - `STT_LOCALE=en-IN` (Indian English), `hi-IN` (Hindi), `en-US` (US English)
      - `WHISPER_LANGUAGE=en` or `hi`
+     - `STT_PAUSE_THRESHOLD_SECONDS=2.0` (auto-submit after ~2s pause)
+     - `STT_TIMEOUT_SECONDS=6`
+     - `STT_PHRASE_TIME_LIMIT_SECONDS=20`
+     - `STT_OPENAI_PROMPT=Indian English accent. Keep words exact. Preserve product names and commands.`
    - Optional weather defaults:
      - `WEATHER_DEFAULT_CITY=Mumbai`
      - `WEATHER_COUNTRY_CODE=IN`
@@ -86,10 +91,9 @@ installer/
 - `Jarvis, volume down`
 - `Jarvis, open chrome and youtube lo-fi focus`
 
-## Wake Word
+## Microphone Toggle
 
-- `WAKE_WORD_ENABLED=1` (default): only commands with wake word are executed.
-- `WAKE_WORD_ENABLED=0`: always-active listening.
+- Use the mic toggle to turn listening on/off explicitly.
 - Press `F8` to pause/resume listening.
 
 ## Weather troubleshooting
@@ -104,19 +108,41 @@ installer/
 
 ## Installer / Uninstaller / Updates
 
-### Build executable
+### Build executable (stable name for reputation)
 
 ```powershell
-./scripts/build_exe.ps1 -Version 0.1.0
+./scripts/build_exe.ps1 -Version 1.0.0
 ```
+
+- Produces `dist/Jarvis-Assistant/Jarvis-Assistant.exe`.
 
 ### Build installer (Inno Setup required)
 
 ```powershell
-./scripts/build_installer.ps1 -Version 0.1.0
+./scripts/build_installer.ps1 -Version 1.0.0
 ```
 
-- Generated installer includes standard Windows uninstall entry automatically.
+- Produces `installer/output/Jarvis-Assistant-Setup-1.0.0.exe`.
+- Includes standard uninstall entry, Start Menu shortcut, optional desktop shortcut, and modern setup UI.
+- Uses stable app and file names to improve SmartScreen reputation over time.
+
+### Trust explanation for end users
+
+Include `RELEASE-NOTES.txt` in your release description or package so users know how to proceed if SmartScreen appears:
+
+- Click **More info**
+- Click **Run anyway**
+- Explain that warning appears because the app is not yet signed with a trusted certificate.
+
+### Reputation and signing checklist
+
+- Keep output names stable (`Jarvis-Assistant.exe`, `Jarvis-Assistant-Setup-x.y.z.exe`).
+- Keep publisher string stable (`Manish Singh`).
+- Prefer direct `.exe` / installer uploads in GitHub Releases (not only ZIP).
+- Optional local self-signing:
+  - `New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Manish Singh"`
+  - `signtool sign /fd SHA256 /a Jarvis-Assistant.exe`
+- Consider MSIX as an advanced packaging option for cleaner install behavior.
 
 ### Updates
 
