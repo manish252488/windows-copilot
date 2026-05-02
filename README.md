@@ -55,7 +55,18 @@ installer/
 
 ## Setup
 
-1. Install Python 3.10+.
+### Python and pip (reference)
+
+Active development uses the versions below so you can match or exceed them when cloning. Older **Python 3.10+** builds should still work; if something fails, align closer to this toolchain.
+
+| Tool | Documented version |
+|------|-------------------|
+| Python | 3.13.13 |
+| pip | 26.0.1 |
+
+Verified with `python --version` and `python -m pip --version` on 2026-05-02.
+
+1. Install Python **3.10 or newer** (see `requires-python` in `pyproject.toml`).
 2. Create and activate venv:
    - `python -m venv .venv`
    - `.venv\Scripts\activate`
@@ -74,10 +85,11 @@ installer/
      - `STT_OPENAI_PROMPT=Indian English accent. Keep words exact. Preserve product names and commands.`
    - Optional weather defaults:
      - `WEATHER_DEFAULT_CITY=Mumbai`
-     - `WEATHER_COUNTRY_CODE=IN`
+     - `WEATHER_COUNTRY_CODE=IN | US`
    - Optional: `WEATHER_API_KEY`, `NEWS_API_KEY`, `UPDATE_MANIFEST_URL`.
 5. Run:
    - `python main.py`
+   - Or use [Poethepoet](https://poethepoet.natn.io/) tasks (after `pip install -r requirements.txt`): `poe start`, `poe dev` (reload on save), `poe test`, `poe icons`, `poe build-exe`, `poe build-installer`. Run `poe` to list tasks.
 
 ## Example Voice Commands
 

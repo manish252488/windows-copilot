@@ -1,0 +1,16 @@
+[project]
+name = "windows-jarvis"
+version = "1.0.0"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[tool.poe]
+verbosity = 1
+
+[tool.poe.tasks]
+start = "python main.py"
+dev = "python main.py --reload"
+test = "python -m pytest"
+build-exe = "powershell -ExecutionPolicy Bypass -File scripts/build_exe.ps1"
+build-installer = "powershell -ExecutionPolicy Bypass -File scripts/build_installer.ps1"
+icons = "python scripts/render_svg_icons.py"
