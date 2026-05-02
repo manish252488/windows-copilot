@@ -11,5 +11,5 @@ pycaw>=20240210
 comtypes>=1.4.8
 pytest>=8.3.5
 poethepoet>=0.29.0
-ttkbootstrap
+ttkbootstrap>=1.10.1
 watchdog>=4.0.0

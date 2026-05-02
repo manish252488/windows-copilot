@@ -70,15 +70,18 @@ def _spawn_restart() -> None:
     creationflags = 0
     if sys.platform == "win32":
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
-    subprocess.Popen(
-        args,
-        cwd=os.getcwd(),
-        env=os.environ.copy(),
-        close_fds=False,
-        creationflags=creationflags,
-    )
+    try:
+        subprocess.Popen(
+            args,
+            cwd=os.getcwd(),
+            env=os.environ.copy(),
+            close_fds=True,  # Avoid leaking FDs to child
+            creationflags=creationflags,
+        )
+    except OSError as e:
+        print(f"[jarvis dev] Failed to restart: {e}", flush=True)
+        return
     os._exit(0)
-
 
 def start_dev_reload() -> Observer:
     """Watch the repo for `.py` edits and restart this process (debounced)."""

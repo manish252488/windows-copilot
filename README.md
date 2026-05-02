@@ -85,8 +85,7 @@ Verified with `python --version` and `python -m pip --version` on 2026-05-02.
      - `STT_OPENAI_PROMPT=Indian English accent. Keep words exact. Preserve product names and commands.`
    - Optional weather defaults:
      - `WEATHER_DEFAULT_CITY=Mumbai`
-     - `WEATHER_COUNTRY_CODE=IN | US`
-   - Optional: `WEATHER_API_KEY`, `NEWS_API_KEY`, `UPDATE_MANIFEST_URL`.
+     - `WEATHER_COUNTRY_CODE=IN` (or `US`, etc.)   - Optional: `WEATHER_API_KEY`, `NEWS_API_KEY`, `UPDATE_MANIFEST_URL`.
 5. Run:
    - `python main.py`
    - Or use [Poethepoet](https://poethepoet.natn.io/) tasks (after `pip install -r requirements.txt`): `poe start`, `poe dev` (reload on save), `poe test`, `poe icons`, `poe build-exe`, `poe build-installer`. Run `poe` to list tasks.
